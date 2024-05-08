@@ -1,40 +1,62 @@
-// Підключаємо необхідний модуль MongoDB
 const { MongoClient } = require('mongodb');
 
-// URL з'єднання з вашою базою даних MongoDB
 const url = 'mongodb://localhost:27017';
-
-// Назва бази даних
 const dbName = 'language_courses';
 
-// Функція для виконання запиту до бази даних
-async function main() {
-    // Створюємо новий клієнт MongoDB
+async function runAggregation() {
     const client = new MongoClient(url);
-
     try {
-        // Підключаємося до сервера MongoDB
         await client.connect();
-
-        console.log("Connected to the MongoDB server");
-
-        // Отримуємо доступ до колекції "courses" з бази даних
         const db = client.db(dbName);
-        const coursesCollection = db.collection('courses');
 
-        // Виконуємо запит до колекції "courses"
-        const courses = await coursesCollection.find().toArray();
+        // Агрегація: кількість студентів на кожному курсі
+        const courseStudentsAggregation = await db.collection('students').aggregate([
+            { $unwind: "$courses" },
+            { $group: { _id: "$courses", total_students: { $sum: 1 } } }
+        ]).toArray();
+        console.log("Course Students Aggregation:");
+        console.log(courseStudentsAggregation);
 
-        // Виводимо результати запиту
-        console.log("Courses:");
-        console.log(courses);
+        // Агрегація: середній вік студентів на кожному курсі
+        const courseAverageAgeAggregation = await db.collection('students').aggregate([
+            { $unwind: "$courses" },
+            { $group: { _id: "$courses", average_age: { $avg: "$age" } } }
+        ]).toArray();
+        console.log("Course Average Age Aggregation:");
+        console.log(courseAverageAgeAggregation);
+
+        // Агрегація: кількість студентів на кожному курсі для рівня Intermediate
+        const intermediateCourseStudentsAggregation = await db.collection('students').aggregate([
+            { $match: { level: "Intermediate" } },
+            { $unwind: "$courses" },
+            { $group: { _id: "$courses", total_students: { $sum: 1 } } }
+        ]).toArray();
+        console.log("Intermediate Course Students Aggregation:");
+        console.log(intermediateCourseStudentsAggregation);
+
+        // Агрегація: кількість курсів, які веде кожен вчитель
+        const teacherCoursesCountAggregation = await db.collection('teachers').aggregate([
+            { $unwind: "$courses" },
+            { $group: { _id: "$name", total_courses: { $sum: 1 } } }
+        ]).toArray();
+        console.log("Teacher Courses Count Aggregation:");
+        console.log(teacherCoursesCountAggregation);
+
+        // Агрегація: топ-5 найпопулярніших курсів
+        const topPopularCoursesAggregation = await db.collection('students').aggregate([
+            { $unwind: "$courses" },
+            { $group: { _id: "$courses", total_students: { $sum: 1 } } },
+            { $sort: { total_students: -1 } },
+            { $limit: 5 }
+        ]).toArray();
+        console.log("Top Popular Courses Aggregation:");
+        console.log(topPopularCoursesAggregation);
     } catch (error) {
         console.error("Error:", error);
     } finally {
-        // Закриваємо з'єднання з сервером MongoDB
         await client.close();
     }
 }
 
-// Викликаємо функцію main() для виконання запиту
-main();
+// Виклик функції для виконання агрегацій
+runAggregation();
